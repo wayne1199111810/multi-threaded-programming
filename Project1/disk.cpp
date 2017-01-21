@@ -8,19 +8,12 @@
 
 using namespace std;
 
-int max_disk_queue;
-int alive_thread = 0;
-int numberfile;
-queue q;
-mutex mutex1;
-cv cv1;
-
 struct Node
 {
 	int track;
 	string requester;
 	Node *next;
-}
+};
 
 struct queue
 {
@@ -29,31 +22,38 @@ struct queue
 	Node *head;
 	void enqueue(int track, string requester);
 	Node dequeue();
-}
+};
+
+int max_disk_queue;
+int alive_thread = 0;
+int numberfile;
+queue q;
+mutex mutex1;
+cv cv1;
 
 void queue::enqueue(int track, string requester)
 {
 	///////////////////
-	while(this.count >= max_disk_queue)
+	while(this->count >= max_disk_queue)
 	{
 		//wait
 	}
 	///////////////////
 	//add new element to the queue
-	if (this.count < max_disk_queue)
+	if (this->count < max_disk_queue)
 	{
 		Node* newelement = new Node;
 		newelement->track = track;
 		newelement->requester = requester;
-		if(this.head->next == NULL)
+		if(this->head->next == NULL)
 		{
 			newelement->next = NULL;
 			head->next = newelement;
 		}
 		else
 		{
-			Node *small = this.head;
-			Node *large = this.head->next;
+			Node *small = this->head;
+			Node *large = this->head->next;
 			while(large != NULL && track > large->track)
 			{
 				large = large->next;
@@ -70,7 +70,7 @@ void queue::enqueue(int track, string requester)
 				newelement->next = large;
 			}
 		}
-		this.count++;
+		this->count++;
 	}
 	//signal dequeue if (queue is full) or (alive request <= max_disk_queue)
 }
@@ -81,10 +81,10 @@ Node queue::dequeue()
 
 
 	//remove item from queue
-	Node *large = this.head->next;
-	Node *small = this.head;
+	Node *large = this->head->next;
+	Node *small = this->head;
 	Node answer;
-	while(large->next != NULL && this.current_track > large->next->track)
+	while(large->next != NULL && this->current_track > large->next->track)
 	{
 		large = large->next;
 		small = small->next;
@@ -97,8 +97,8 @@ Node queue::dequeue()
 	}
 	else
 	{
-		a = abs(large->next->track - this.current_track);
-		b = abs(large->track - this.current_track);
+		int a = abs(large->next->track - this->current_track);
+		int b = abs(large->track - this->current_track);
 		if(a < b) // close to large->next
 		{
 			Node *tmptr = large->next;
@@ -113,10 +113,10 @@ Node queue::dequeue()
 			delete large;
 		}
 	}
-	this.current_track = answer.track;
+	this->current_track = answer.track;
 	//return removed item
-	cout << "requester " << requester << " track " << track << endl;
-	this.count--;
+	cout << "requester " << answer.requester << " track " << answer.track << endl;
+	this->count--;
 	return answer;
 }
 
