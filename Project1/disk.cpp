@@ -138,7 +138,7 @@ void request(void *a)
 		{
 			int track;
 			ss >> track;
-			q.enqueue(track, requester)
+			q.enqueue(track, a);
 			// adding the current track into queue
 		}
 		f.close();
