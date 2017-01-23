@@ -30,16 +30,11 @@ int alive_thread = 0;
 int numberinput;
 queue q;
 mutex mutex1;
-<<<<<<< HEAD
 cv deque_cv, enque_cv;
-=======
-cv deque_cv, enque_cv, requ_cv;
->>>>>>> f35ba967ecf560bd57e228233432e05720c882dc
 vector<bool> deadthread;
 vector<bool> can_serve;
 
 void queue::print()
-<<<<<<< HEAD
 {
 	Node *ptr = this->head->next;
 	cout<<"count: "<<this->count<<"; ";
@@ -54,51 +49,16 @@ void queue::print()
 void queue::enqueue(int track, int requester)
 {
 	//add new element to the queue
-=======
-{
-	Node *ptr = this->head->next;
-	cout<<"count: "<<this->count<<"; ";
-	while(ptr != NULL)
-	{
-		cout << ptr->requester<< ", " << ptr->track<<"; ";
-		ptr = ptr->next;
-	}
-	cout<<endl;
-}
-
-void queue::enqueue(int track, int requester)
-{
-	///////////////////
-	/*
-	while(this->count >= max_que)
-	{
-		enque_cv.wait(mutex1);
-		//wait
-	}
-	*/
-	///////////////////
-	//add new element to the queue
-
->>>>>>> f35ba967ecf560bd57e228233432e05720c882dc
 	Node* newelement = new Node;
 	newelement->track = track;
 	newelement->requester = requester;
 	if(this->head->next == NULL)
-<<<<<<< HEAD
 	{
 		newelement->next = NULL;
 		head->next = newelement;
 	}
 	else
 	{
-=======
-	{
-		newelement->next = NULL;
-		head->next = newelement;
-	}
-	else
-	{
->>>>>>> f35ba967ecf560bd57e228233432e05720c882dc
 		Node *small = this->head;
 		Node *large = this->head->next;
 		while(large != NULL && track > large->track)
@@ -119,25 +79,10 @@ void queue::enqueue(int track, int requester)
 	}
 	cout << "requester " << requester << " track " << track << endl;
 	this->count++;
-<<<<<<< HEAD
-=======
-	//signal dequeue if (queue is full) or (alive request <= max_que)
->>>>>>> f35ba967ecf560bd57e228233432e05720c882dc
 }
 
 Node queue::dequeue()
 {
-<<<<<<< HEAD
-=======
-	//wait until the (queue is full) or (alive request <= max_que)
-	/*
-	while(alive_thread >= max_que && this->count < max_que)
-	{
-		//wait
-		deque_cv.wait(mutex1);
-	}
-	*/
->>>>>>> f35ba967ecf560bd57e228233432e05720c882dc
 	//remove item from queue
 	Node *large = this->head->next;
 	Node *small = this->head;
@@ -196,10 +141,6 @@ void request(char *a)
 		{
 			int track = atoi(line.c_str());
 			// adding the current track into queue
-<<<<<<< HEAD
-=======
-			///////////////
->>>>>>> f35ba967ecf560bd57e228233432e05720c882dc
 			while(!can_serve[requester])
 			{
 				enque_cv.signal();
@@ -214,22 +155,9 @@ void request(char *a)
 			can_serve[requester] = false;
 			enque_cv.signal();
 			deque_cv.signal();
-<<<<<<< HEAD
 		}
 		f.close();
 		deadthread[requester] = true;
-=======
-			///////////////
-		}
-		f.close();
-		deadthread[requester] = true;
-		/*
-		while(alive_thread>0)
-		{
-			requ_cv.wait(mutex1);
-		}
-		*/
->>>>>>> f35ba967ecf560bd57e228233432e05720c882dc
 	}
 	mutex1.unlock();
 }
@@ -257,14 +185,6 @@ void service(void *a)
 			}
 			deque_cv.signal();
 			enque_cv.signal();
-<<<<<<< HEAD
-=======
-		}
-		if (alive_thread<=0)
-		{
-			cout<<"all dead"<<endl;
-			//requ_cv.signal();
->>>>>>> f35ba967ecf560bd57e228233432e05720c882dc
 		}
 	}
 	mutex1.unlock();
@@ -272,27 +192,6 @@ void service(void *a)
 }
 
 void start(void **argv)
-<<<<<<< HEAD
-{
-	deadthread = vector<bool>(numberinput-2);
-	can_serve = vector<bool>(numberinput-2);
-	for(int i=0; i<numberinput-2; i++)
-	{
-		deadthread[i] = false;
-		can_serve[i] = true;
-	}
-	// initialize queue;
-	Node *head = new Node;
-	head->next = NULL;
-	head->track = INT_MIN;
-	q.head = head;
-	// handling every request
-	for(int i=2; i<numberinput; i++)
-	{
-		char* filename = (char*) argv[i];
-		thread req ((thread_startfunc_t) request, (char *) filename);
-		alive_thread++;
-=======
 {
 	deadthread = vector<bool>(numberinput-2);
 	can_serve = vector<bool>(numberinput-2);
@@ -327,24 +226,5 @@ int main(int argc, char **argv)
 	else
 	{
 		cout<<"Please input with file names" <<endl;
->>>>>>> f35ba967ecf560bd57e228233432e05720c882dc
-	}
-	thread serve ((thread_startfunc_t) service,(void *)0);
-}
-
-<<<<<<< HEAD
-int main(int argc, char **argv)
-{
-	numberinput = argc;
-	if (argc >= 3)
-	{
-		max_que = atoi(argv[1]);
-		cpu::boot((thread_startfunc_t) start, (char **) argv, 0);
-	}
-	else
-	{
-		cout<<"Please input with file names" <<endl;
 	}
 }
-=======
->>>>>>> f35ba967ecf560bd57e228233432e05720c882dc
