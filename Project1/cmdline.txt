@@ -1,0 +1,2 @@
+g++ disk.cpp libthread.o -ldl -pthread -std=c++11 -o disk
+./disk 5 disk.in0.txt disk.in1.txt disk.in2.txt disk.in3.txt disk.in4.txt

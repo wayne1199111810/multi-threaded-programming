@@ -1,9 +1,9 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include <sstream>
 #include <climits>   // INT_MIN
 #include <stdlib.h>  //abs, atoi
+#include <vector>
 #include "thread.h"
 
 using namespace std;
@@ -11,7 +11,7 @@ using namespace std;
 struct Node
 {
 	int track;
-	string requester;
+	int requester;
 	Node *next;
 };
 
@@ -20,66 +20,69 @@ struct queue
 	int count = 0;
 	int current_track = 0;
 	Node *head;
-	void enqueue(int track, string requester);
+	void enqueue(int track, int requester);
 	Node dequeue();
+	void print();
 };
 
-int max_disk_queue;
+int max_que;
 int alive_thread = 0;
-int numberfile;
+int numberinput;
 queue q;
 mutex mutex1;
-cv cv1;
+cv deque_cv, enque_cv;
+vector<bool> deadthread;
+vector<bool> can_serve;
 
-void queue::enqueue(int track, string requester)
+void queue::print()
 {
-	///////////////////
-	while(this->count >= max_disk_queue)
+	Node *ptr = this->head->next;
+	cout<<"count: "<<this->count<<"; ";
+	while(ptr != NULL)
 	{
-		//wait
+		cout << ptr->requester<< ", " << ptr->track<<"; ";
+		ptr = ptr->next;
 	}
-	///////////////////
+	cout<<endl;
+}
+
+void queue::enqueue(int track, int requester)
+{
 	//add new element to the queue
-	if (this->count < max_disk_queue)
+	Node* newelement = new Node;
+	newelement->track = track;
+	newelement->requester = requester;
+	if(this->head->next == NULL)
 	{
-		Node* newelement = new Node;
-		newelement->track = track;
-		newelement->requester = requester;
-		if(this->head->next == NULL)
+		newelement->next = NULL;
+		head->next = newelement;
+	}
+	else
+	{
+		Node *small = this->head;
+		Node *large = this->head->next;
+		while(large != NULL && track > large->track)
+		{
+			large = large->next;
+			small = small->next;
+		}
+		if(large == NULL)
 		{
 			newelement->next = NULL;
-			head->next = newelement;
+			small->next = newelement;
 		}
-		else
+		else //(track < large->track)
 		{
-			Node *small = this->head;
-			Node *large = this->head->next;
-			while(large != NULL && track > large->track)
-			{
-				large = large->next;
-				small = small->next;
-			}
-			if(large == NULL)
-			{
-				newelement->next = NULL;
-				small->next = newelement;			
-			}
-			else //(track < large->track)
-			{
-				small->next = newelement;
-				newelement->next = large;
-			}
+			small->next = newelement;
+			newelement->next = large;
 		}
-		this->count++;
 	}
-	//signal dequeue if (queue is full) or (alive request <= max_disk_queue)
+	cout << "requester " << requester << " track " << track << endl;
+	this->count++;
 }
 
 Node queue::dequeue()
 {
-	//wait until the (queue is full) or (alive request <= max_disk_queue)
-
-
 	//remove item from queue
 	Node *large = this->head->next;
 	Node *small = this->head;
@@ -115,88 +118,113 @@ Node queue::dequeue()
 	}
 	this->current_track = answer.track;
 	//return removed item
-	cout << "requester " << answer.requester << " track " << answer.track << endl;
 	this->count--;
 	return answer;
 }
 
-void request(void *a)
+void request(char *a)
 {
 	// open file
-	char *filename = (char *)a;
-	stringstream ss;
+	mutex1.lock();
+	string filename = (char *)a;
 	ifstream f;
 	f.open(filename);
 	// read track from input file
 	if(f.is_open())
 	{
-		ss << f.rdbuf();
-		////////
-		alive_thread++;
-		////////
-		while(!ss.eof())
+		string line;
+		int length = filename.find_last_of(".") - filename.find_first_of(".") - 3;
+		int requester = atoi(filename.substr(7, length).c_str());
+		
+		
+		while(getline(f, line))
 		{
-			int track;
-			ss >> track;
-			q.enqueue(track, a);
+			int track = atoi(line.c_str());
 			// adding the current track into queue
+			while(!can_serve[requester])
+			{
+				enque_cv.signal();
+				enque_cv.wait(mutex1); //wait
+			}
+			while(q.count >= max_que)
+			{
+				enque_cv.wait(mutex1); //wait
+				deque_cv.signal();
+			}
+			q.enqueue(track, requester);
+			can_serve[requester] = false;
+			enque_cv.signal();
+			deque_cv.signal();
 		}
 		f.close();
-		////////
-		alive_thread--;
-		////////
+		deadthread[requester] = true;
 	}
+	mutex1.unlock();
 }
 
-void service(void **filename)
+void service(void *a)
 {
+	mutex1.lock();
+	while(alive_thread > 0)
+	{
+		// when we can add more Node to the queue
+		while(q.count < max_que && alive_thread >= max_que)
+		{
+			//wait
+			deque_cv.wait(mutex1);
+		}
+		if (q.count > 0)
+		{
+			Node n = q.dequeue();
+			cout<<"service requester "<< n.requester <<" track "<< n.track << endl;
+			can_serve[n.requester] = true;
+			if (deadthread[n.requester])
+			{
+				alive_thread--;
+				max_que = (max_que > alive_thread)? alive_thread: max_que;
+			}
+			deque_cv.signal();
+			enque_cv.signal();
+		}
+	}
+	mutex1.unlock();
+	// Finishing all the requesters
+}
+
+void start(void **argv)
+{
+	deadthread = vector<bool>(numberinput-2);
+	can_serve = vector<bool>(numberinput-2);
+	for(int i=0; i<numberinput-2; i++)
+	{
+		deadthread[i] = false;
+		can_serve[i] = true;
+	}
 	// initialize queue;
 	Node *head = new Node;
 	head->next = NULL;
 	head->track = INT_MIN;
 	q.head = head;
 	// handling every request
-	for(int i=2; i<numberfile; i++)
+	for(int i=2; i<numberinput; i++)
 	{
-		thread t ((thread_startfunc_t) request, (void *) filename[i]);
+		char* filename = (char*) argv[i];
+		thread req ((thread_startfunc_t) request, (char *) filename);
+		alive_thread++;
 	}
-
-	while(alive_thread > 0)
-	{
-		////////////////////////
-		// when we can add more Node to the queue
-		while(q.count < max_disk_queue && alive_thread > max_disk_queue)
-		{
-			// wait
-		}
-		if (q.count > 0)
-		{
-			Node n = q.dequeue();
-			cout << "service requester " << n.requester << " track " << n.track << endl;
-		}
-		////////////////////////
-	}
-	// Finishing all the requesters
-	cout << "No runnable threads.  Exiting." << endl;
-}
-
-
-void printname(void *a)
-{
-	cout<<a<<endl;
-}
-
-void testhread(void **filename)
-{
-	for(int i=2; i<numberfile; i++)
-	{
-		thread t ((thread_startfunc_t) printname, (void *) filename[i]);
-	}
+	thread serve ((thread_startfunc_t) service,(void *)0);
 }
 
 int main(int argc, char **argv)
 {
-	max_disk_queue = atoi(argv[1]);
-	numberfile = argc;
-	cpu::boot((thread_startfunc_t) testhread, (void **) argv, 0);
+	numberinput = argc;
+	if (argc >= 3)
+	{
+		max_que = atoi(argv[1]);
+		cpu::boot((thread_startfunc_t) start, (char **) argv, 0);
+	}
+	else
+	{
+		cout<<"Please input with file names" <<endl;
+	}
 }
