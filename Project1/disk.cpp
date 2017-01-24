@@ -17,23 +17,24 @@ struct Node
 
 struct queue
 {
-	int count = 0;
-	int current_track = 0;
+	int count = 0; // number of Nodes in the queue
+	int current_track = 0; // latest return Node, initialize with 0
+	int max_que; // maximum Nodes can be in the queue
 	Node *head;
 	void enqueue(int track, int requester);
 	Node dequeue();
 	void print();
 };
 
-int max_que;
-int alive_thread = 0;
-int numberinput;
+int alive_thread = 0; // indicates numbers of threads that are waiting for served
+int numberinput; // number of inputfile
 queue q;
 mutex mutex1;
 cv deque_cv, enque_cv;
-vector<bool> deadthread;
-vector<bool> can_serve;
+vector<bool> deadthread; // check the requester have finished all their job
+vector<bool> can_serve; // check whether a track of a requester is in the queue
 
+// purpose of print out data in queue to debug
 void queue::print()
 {
 	Node *ptr = this->head->next;
@@ -125,10 +126,10 @@ Node queue::dequeue()
 void request(char *a)
 {
 	// open file
-	mutex1.lock();
 	string filename = (char *)a;
 	ifstream f;
 	f.open(filename);
+	mutex1.lock();
 	// read track from input file
 	if(f.is_open())
 	{
@@ -136,25 +137,25 @@ void request(char *a)
 		int length = filename.find_last_of(".") - filename.find_first_of(".") - 3;
 		int requester = atoi(filename.substr(7, length).c_str());
 		
-		
 		while(getline(f, line))
 		{
 			int track = atoi(line.c_str());
-			// adding the current track into queue
+			// requester has track in the queue which hasn't been served
 			while(!can_serve[requester])
 			{
 				enque_cv.signal();
 				enque_cv.wait(mutex1); //wait
 			}
-			while(q.count >= max_que)
+			// queue is full
+			while(q.count >= q.max_que)
 			{
-				enque_cv.wait(mutex1); //wait
 				deque_cv.signal();
+				enque_cv.wait(mutex1); //wait
 			}
 			q.enqueue(track, requester);
 			can_serve[requester] = false;
-			enque_cv.signal();
 			deque_cv.signal();
+			enque_cv.signal();
 		}
 		f.close();
 		deadthread[requester] = true;
@@ -165,32 +166,34 @@ void request(char *a)
 void service(void *a)
 {
 	mutex1.lock();
+	// when it still has requester to be served
 	while(alive_thread > 0)
 	{
-		// when we can add more Node to the queue
-		while(q.count < max_que && alive_thread >= max_que)
+		// queue is not full and alive thread is more than queue capacity
+		while(q.count < q.max_que && alive_thread >= q.max_que)
 		{
-			//wait
 			deque_cv.wait(mutex1);
 		}
+		// queue is not empty
 		if (q.count > 0)
 		{
 			Node n = q.dequeue();
 			cout<<"service requester "<< n.requester <<" track "<< n.track << endl;
 			can_serve[n.requester] = true;
+			// this requester doesn't have any other track need to be served
 			if (deadthread[n.requester])
 			{
 				alive_thread--;
-				max_que = (max_que > alive_thread)? alive_thread: max_que;
+				// capacity = max(capacity, alive thread)
+				q.max_que = (q.max_que > alive_thread)? alive_thread: q.max_que;
 			}
-			deque_cv.signal();
 			enque_cv.signal();
 		}
 	}
 	mutex1.unlock();
-	// Finishing all the requesters
 }
 
+// handling initialization and start the threads
 void start(void **argv)
 {
 	deadthread = vector<bool>(numberinput-2);
@@ -201,17 +204,19 @@ void start(void **argv)
 		can_serve[i] = true;
 	}
 	// initialize queue;
+	q.max_que = atoi((char*)argv[1]);
 	Node *head = new Node;
 	head->next = NULL;
 	head->track = INT_MIN;
 	q.head = head;
-	// handling every request
+	// threads requesters
 	for(int i=2; i<numberinput; i++)
 	{
 		char* filename = (char*) argv[i];
 		thread req ((thread_startfunc_t) request, (char *) filename);
 		alive_thread++;
 	}
+	// thread service
 	thread serve ((thread_startfunc_t) service,(void *)0);
 }
 
@@ -220,7 +225,6 @@ int main(int argc, char **argv)
 	numberinput = argc;
 	if (argc >= 3)
 	{
-		max_que = atoi(argv[1]);
 		cpu::boot((thread_startfunc_t) start, (char **) argv, 0);
 	}
 	else
