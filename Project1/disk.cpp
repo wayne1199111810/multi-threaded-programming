@@ -143,7 +143,7 @@ void request(char *a)
 			// requester has track in the queue which hasn't been served
 			while(!can_serve[requester])
 			{
-				enque_cv.signal();
+				enque_cv.broadcast();
 				enque_cv.wait(mutex1); //wait
 			}
 			// queue is full
@@ -155,7 +155,7 @@ void request(char *a)
 			q.enqueue(track, requester);
 			can_serve[requester] = false;
 			deque_cv.signal();
-			enque_cv.signal();
+			enque_cv.broadcast();
 		}
 		f.close();
 		deadthread[requester] = true;
@@ -187,7 +187,7 @@ void service(void *a)
 				// capacity = max(capacity, alive thread)
 				q.max_que = (q.max_que > alive_thread)? alive_thread: q.max_que;
 			}
-			enque_cv.signal();
+			enque_cv.broadcast();
 		}
 	}
 	mutex1.unlock();
