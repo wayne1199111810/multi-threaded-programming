@@ -30,7 +30,8 @@ int alive_thread = 0; // indicates numbers of threads that are waiting for serve
 int numberinput; // number of inputfile
 queue q;
 mutex mutex1;
-cv deque_cv, enque_cv;
+cv deque_cv;
+vector<cv> enque_cv;
 vector<bool> deadthread; // check the requester have finished all their job
 vector<bool> can_serve; // check whether a track of a requester is in the queue
 
@@ -123,6 +124,24 @@ Node queue::dequeue()
 	return answer;
 }
 
+void signal_enque_cv(int current)
+{
+	bool hasSignal = false;
+	for(int i=0; i<numberinput; i++)
+	{
+		if (i != current && can_serve[i] && q.count < q.max_que && !deadthread[i])
+		{
+			enque_cv[i].signal();
+			hasSignal = true;
+			break;
+		}
+	}
+	if (!hasSignal)
+	{
+		deque_cv.signal();
+	}
+}
+
 void request(char *a)
 {
 	// open file
@@ -143,19 +162,19 @@ void request(char *a)
 			// requester has track in the queue which hasn't been served
 			while(!can_serve[requester])
 			{
-				enque_cv.broadcast();
-				enque_cv.wait(mutex1); //wait
+				signal_enque_cv(requester);
+				enque_cv[requester].wait(mutex1); //wait
 			}
 			// queue is full
 			while(q.count >= q.max_que)
 			{
 				deque_cv.signal();
-				enque_cv.wait(mutex1); //wait
+				enque_cv[requester].wait(mutex1); //wait
 			}
 			q.enqueue(track, requester);
 			can_serve[requester] = false;
 			deque_cv.signal();
-			enque_cv.broadcast();
+			signal_enque_cv(requester);
 		}
 		f.close();
 		deadthread[requester] = true;
@@ -187,7 +206,7 @@ void service(void *a)
 				// capacity = max(capacity, alive thread)
 				q.max_que = (q.max_que > alive_thread)? alive_thread: q.max_que;
 			}
-			enque_cv.broadcast();
+			signal_enque_cv(-1);
 		}
 	}
 	mutex1.unlock();
@@ -198,6 +217,7 @@ void start(void **argv)
 {
 	deadthread = vector<bool>(numberinput-2);
 	can_serve = vector<bool>(numberinput-2);
+	enque_cv = vector<cv>(numberinput-2);
 	for(int i=0; i<numberinput-2; i++)
 	{
 		deadthread[i] = false;
